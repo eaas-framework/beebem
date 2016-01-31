@@ -407,6 +407,38 @@ int Save_GTK_File_Selector(char *filename_ptr)
 	return(got_file);
 }
 
+
+#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
+
+struct DiscSelectorContext
+{
+	bool exit_loop;
+
+	/* Don't free this pointer */
+	const char* selected_filename;
+};
+
+void DiscSelector_OnClose(EG_Widget* widget, void* data)
+{
+	struct DiscSelectorContext* context = (struct DiscSelectorContext*) data;
+	context->exit_loop = true;
+}
+
+void DiscSelector_OnAbort(EG_Widget* widget, void* data)
+{
+	struct DiscSelectorContext* context = (struct DiscSelectorContext*) data;
+	context->exit_loop = true;
+	context->selected_filename = NULL;
+}
+
+void DiscSelector_OnFileSelected(EG_Widget* widget, void* data)
+{
+	struct DiscSelectorContext* context = (struct DiscSelectorContext*) data;
+	context->selected_filename = EG_TickBox_GetCaption(widget);
+}
+
 int Open_GTK_File_Selector(char *filename_ptr)
 {
 
@@ -423,6 +455,165 @@ int Open_GTK_File_Selector(char *filename_ptr)
 	}
 
 	got_file = false;
+
+	const int padding_x = 10;
+	const int padding_y = 10;
+	const int line_height = 20;
+	const int char_width = 10;
+
+	const int max_filename_length = (SCREEN_WIDTH - 4 * padding_x) / char_width;
+	int longest_filename_length = 28;
+
+	const int max_num_files = 16;
+	char** files = new char*[max_num_files];
+	int num_files = 0;
+
+	// List all disc-files in current working dir
+	{
+		DIR* dir = opendir("./discs");
+		if (dir == NULL) {
+			pERROR("Failed to open ./discs directory! %s", strerror(errno));
+			return 0;
+		}
+
+		struct dirent* entry = NULL;
+		while ((entry = readdir(dir)) != NULL) {
+			if (num_files > max_num_files) {
+				pWARN("./discs directory contains more files, than currently can be displayed!");
+				break;
+			}
+
+			char* filename = entry->d_name;
+			const int filename_length = strlen(filename);
+			if (filename_length > max_filename_length) {
+				pWARN("File %s is too long to be displayed!", filename);
+				continue;
+			}
+
+			if (filename_length > longest_filename_length)
+				longest_filename_length = filename_length;
+
+			files[num_files] = strdup(filename);
+			++num_files;
+
+			pINFO("Found disc file: %s", filename);
+		}
+
+		closedir(dir);
+	}
+
+	SDL_Color color = MENU_COLORS;
+	EG_Widget* widget_ptr = NULL;
+	SDL_Rect widget_rect;
+
+	struct DiscSelectorContext context;
+	context.exit_loop = false;
+
+	const int window_w = char_width * longest_filename_length + (4 * padding_x);
+	const int window_h = (6 * padding_y) + (line_height * (num_files + 2));
+
+	SDL_Rect window_rect = CalcRectCentered(window_w, window_h);
+	EG_Window* window_ptr = EG_Window_Create("discsel:window", screen_ptr, color, window_rect);
+
+	/* Init widget's rectangle */
+	widget_rect.x = padding_x;
+	widget_rect.y = padding_y;
+	widget_rect.w = window_rect.w - (2 * padding_x);
+	widget_rect.h = line_height;
+
+	#define ADVANCE_LINE_RECT(_num_lines_) \
+		widget_rect.y += (_num_lines_) * line_height;
+
+	#define INDENT_LINE_RECT(_depth_) \
+		widget_rect.x += (_depth_) * padding_x; \
+		widget_rect.w -= (_depth_) * (padding_x + 2); \
+
+	/* Add title label */
+	widget_ptr = EG_Label_Create("discsel:title", color, EG_LABEL_ALIGN_CENTER, "Please, select a new disc:", widget_rect);
+	(void) EG_Window_AddWidget(window_ptr, widget_ptr);
+
+	/* Files widget + button group */
+
+	ADVANCE_LINE_RECT(1);
+	widget_rect.y += padding_y;
+	widget_rect.h = (num_files * line_height) + (2 * padding_y);
+
+	widget_ptr = EG_Box_Create("discsel:files_box", EG_BOX_BORDER_SUNK, color, widget_rect);
+	(void) EG_Window_AddWidget(window_ptr, widget_ptr);
+
+	INDENT_LINE_RECT(1);
+	widget_rect.y += padding_y;
+	widget_rect.h = line_height;
+
+	/* Add file entries */
+	EG_Widget* files_group_ptr = EG_RadioGroup_Create("discsel:files_group");
+	for (int i = 0; i < num_files; ++i) {
+		widget_ptr = EG_RadioButton_Create("discsel:file", color, files[i], widget_rect);
+		(void) EG_RadioGroup_AddButton(files_group_ptr, widget_ptr);
+		(void) EG_TickBox_SetMyCallback_OnClick(widget_ptr, DiscSelector_OnFileSelected, &context);
+		ADVANCE_LINE_RECT(1);
+
+		if (i == 0)
+			context.selected_filename = EG_TickBox_GetCaption(widget_ptr);
+	}
+
+	(void) EG_Window_AddWidget(window_ptr, files_group_ptr);
+
+	INDENT_LINE_RECT(-1);
+	widget_rect.y += 2 * padding_y;
+
+	const int button_w = 70;
+
+	/* Cancel button */
+	widget_rect.x = window_rect.w - padding_x - button_w;
+	widget_rect.w = button_w;
+	widget_ptr = EG_Button_Create("discsel:cancel", color, EG_BUTTON_ALIGN_CENTER, "Cancel", widget_rect);
+	(void) EG_Button_SetMyCallback_OnClick(widget_ptr, DiscSelector_OnAbort, &context);
+	(void) EG_Window_AddWidget(window_ptr, widget_ptr);
+
+	/* OK button */
+	widget_rect.x -= padding_x + button_w;
+	widget_ptr = EG_Button_Create("discsel:ok", color, EG_BUTTON_ALIGN_CENTER, "OK", widget_rect);
+	(void) EG_Button_SetMyCallback_OnClick(widget_ptr, DiscSelector_OnClose, &context);
+	(void) EG_Window_AddWidget(window_ptr, widget_ptr);
+
+	EG_Window_Show(window_ptr);
+
+	/* Run SDL's event loop here */
+	do {
+		SDL_Event event;
+		while (SDL_PollEvent(&event)){
+			switch (event.type) {
+				case SDL_QUIT:
+					DiscSelector_OnAbort(NULL, &context);
+					break;
+
+				case SDL_KEYDOWN:
+					if (event.key.keysym.sym == SDLK_ESCAPE)
+						DiscSelector_OnAbort(NULL, &context);
+					break;
+			}
+
+			EG_Window_ProcessEvent(window_ptr, &event, 0, 0);
+		}
+		EG_Window_ProcessEvent(window_ptr, NULL, 0,0);
+		SDL_Delay(25);
+	} while (!context.exit_loop);
+
+	if (context.selected_filename != NULL) {
+		strcpy(filename_ptr, context.selected_filename);
+		got_file = true;
+	}
+
+	/* Cleanup */
+	EG_Window_Hide(window_ptr);
+	EG_Window_DestroyAllChildWidgets(window_ptr);
+	EG_Window_Destroy(window_ptr);
+	for (int i = 0; i < num_files; ++i)
+		delete files[i];
+
+	#undef ADVANCE_LINE_RECT
+	#undef INDENT_LINE_RECT
 
 	/*
 	gtk_init (&__argc, &__argv);
@@ -448,6 +639,7 @@ int Open_GTK_File_Selector(char *filename_ptr)
 	was_full_screen = false;
 	return(got_file);
 }
+
 
 static void RunDisc(EG_Widget *widget_ptr, void *user_ptr)
 {
