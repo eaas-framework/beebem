@@ -1,0 +1,36 @@
+Source: beebem
+Section: non-free/misc
+Priority: optional
+Maintainer: Thomas Liebetraut <thomas@tommie-lie.de>
+Build-Depends: debhelper (>=9),dh-autoreconf,libz-dev,libsdl1.2-dev
+Standards-Version: 3.9.6
+Homepage: http://beebem-unix.bbcmicro.com/
+
+Package: beebem
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: BeebEm is a popular Acorn BBC Micro and Master 128 emulator.
+ Development of BeebEm started in 1994 by David Gilbert on UNIX,
+ and has since been ported to many other platforms, most notably
+ Microsoft Windows and Apple OS X. 
+ .
+ As of the latest release, the following features are available to you
+ (in various states of completion and testing):
+ .
+  * Emulation of BBC model B, B+, Integra Board and Master 128.
+  * Support for Acorn 65C02, Acorn Z80, Torch Z80 and Acorn 80186 second
+    processors.
+  * GUI is displayed over the video window and soon will be 100% SDL code
+    (like Hatari).
+  * 8271 and 1770 Floppy disc support.
+  * Tape emulation.
+  * Sound support.
+  * QWERTY keyboard mapping.
+  * AMX mouse support.
+  * Acorn speech chip emulation.
+  * Mike's new exponential volume.
+  * Econet support.
+  * SASI/SCSI hard drive emulation.
+  * Microvitec touch screen.
+  * Temporary hack to allow 320x240 and 320x256 video resolutions.
+

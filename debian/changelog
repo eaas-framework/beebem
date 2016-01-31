@@ -1,0 +1,11 @@
+beebem (0.0.13-1bwfla1) trusty; urgency=medium
+
+  * added olges patch to change disks 
+
+ -- root <root@bw-fla.uni-freiburg.de>  Sun, 31 Jan 2016 13:03:17 +0100
+
+beebem (0.0.13-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Thomas Liebetraut <thomas@idefix>  Mon, 11 Jan 2016 23:44:30 +0100

@@ -1,0 +1,2 @@
+?package(beebem):needs="X11" section="Applications/Emulators"\
+  title="BeebEm" command="/usr/bin/beebem"
